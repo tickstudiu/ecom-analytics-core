@@ -1,5 +1,4 @@
 
-import { transformEquipFilter } from './resolvers/equip';
 import { transformConsents, transformUserProfile } from './resolvers/customer';
 
 import { getCustomerIdFromGACookie } from './helpers/ga';
@@ -501,59 +500,6 @@ export const createGa4Builders = ({ config, dataLayerPush, $cookies }) => ({
 	},
 	// #endregion
 
-	// #region 7. Event Tracking - Equip Page
-	onEnterEquipPage() {
-		dataLayerPush({
-			event: 'eventTracking - Equip',
-			channel: config.CHANNEL,
-			eventName: 'on_enter_equip_page',
-			eventCategory: null,
-			eventLabel: null,
-			eventValue: null,
-		});
-	},
-
-	/**
-	 * View/Click on user select payment
-	 * *Trigger every time when user select
-	 */
-	onClickEquipCategory(equipCategory) {
-		if (!equipCategory) {
-			return;
-		}
-
-		dataLayerPush({
-			event: 'eventTracking - Equip',
-			channel: config.CHANNEL,
-			eventName: 'click_equip_category',
-			equipCategory: equipCategory.replace(/-/g, ' '), // ชื่อ Category ที่คลิก
-		});
-	},
-
-	/**
-	 * View/Click on user select filter
-	 */
-	onSelectFilterEquip(equipCategory, query, filterFields) {
-		if (!filterFields || !query || !query.productFilters) {
-			return;
-		}
-
-		const currentFilterFields = filterFields.reduce((prev, field) => {
-			return {
-				...prev,
-				[field.label]: query.productFilters[field.label] || 'all',
-			};
-		}, {});
-
-		dataLayerPush({
-			event: 'eventTracking - Equip',
-			channel: config.CHANNEL,
-			eventName: 'filter_equip',
-			equipCategory,
-			...transformEquipFilter(currentFilterFields),
-		});
-	},
-	// #endregion
 
 	// #region ?. Event Tracking - Open App header
 	clickOpenAppHeader(action) {
