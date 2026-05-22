@@ -2,6 +2,7 @@ import { convertSatangToBahtWithDecimal } from './helpers/numeral';
 import { getProductDetailRouteObject } from './helpers/route';
 import { getCustomerIdFromGACookie } from './helpers/ga';
 import { dateTimeFormat } from './helpers/date';
+import { transformConsentModeV2, buildConsentUpdatePayload, buildConsentDefaultPayload } from './helpers/consent';
 
 import {
 	transformProductItem,
@@ -18,11 +19,11 @@ import PRODUCT_REFERRER_SLUG from './enums/productReferrerSlug';
 import ADD_TO_CART_TYPE from './enums/addToCartType';
 import PRODUCT_TYPE from './enums/productType';
 
-const productURL = (product, app) => {
+const productURL = (product, app, productDetailRouteName) => {
 	if (!app || !app.localePath) {
 		return null;
 	}
-	return `${process.env.APP_BASE_URL}${app.localePath(getProductDetailRouteObject(product, config.PRODUCT_DETAIL_ROUTE_NAME))}`;
+	return `${process.env.APP_BASE_URL}${app.localePath(getProductDetailRouteObject(product, productDetailRouteName))}`;
 };
 
 const getCouponCode = (promotions) => {
@@ -96,17 +97,35 @@ const checkoutEventName = (step) => {
 
 export const createGtmBuilders = ({ config, dataLayerPush }) => ({
 	clearEcommerce() {
-		dataLayerPush({ ecommerce: null }); // Clear the previous ecommerce object.
+		dataLayerPush({ ecommerce: null });
 	},
 
+	// ─────────────────────────────────────────────────────────────────────────
+	// Consent Mode v2
+	// Fire consentDefault() BEFORE any other tags on page load (via GTM init trigger)
+	// Fire consentUpdate() whenever the user changes their PDPA preferences
+	// ─────────────────────────────────────────────────────────────────────────
+
+	consentDefault() {
+		dataLayerPush(buildConsentDefaultPayload());
+	},
+
+	consentUpdate(cookieConsents = []) {
+		dataLayerPush(buildConsentUpdatePayload(cookieConsents));
+	},
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Auth events
+	// ─────────────────────────────────────────────────────────────────────────
+
 	async register(profile, provider = null) {
-		dataLayerPush({ ecommerce: null }); // Clear the previous ecommerce object.
+		dataLayerPush({ ecommerce: null });
 		dataLayerPush({
 			event: 'register',
 			channel: config.CHANNEL,
 			date: getCurrentDate(),
 			ecommerce: {
-				currencyCode: config.CURRENCY_CODE,
+				currency: config.CURRENCY_CODE,
 				profile: {
 					...transformUserProfile(profile),
 					provider,
@@ -116,35 +135,37 @@ export const createGtmBuilders = ({ config, dataLayerPush }) => ({
 	},
 
 	async login({ profile }, { cookieConsents }, cid) {
-		dataLayerPush({ ecommerce: null }); // Clear the previous ecommerce object.
+		dataLayerPush({ ecommerce: null });
 		dataLayerPush({
 			event: 'login',
 			channel: config.CHANNEL,
 			date: getCurrentDate(),
 			ecommerce: {
-				currencyCode: config.CURRENCY_CODE,
+				currency: config.CURRENCY_CODE,
 				profile: {
 					customerId: getCustomerIdFromGACookie(cid),
 					...transformUserProfile(profile),
 				},
 				consent: transformConsents(cookieConsents),
+				consentModeV2: transformConsentModeV2(cookieConsents),
 			},
 		});
 	},
 
 	async logout({ profile }, { cookieConsents }, cid) {
-		dataLayerPush({ ecommerce: null }); // Clear the previous ecommerce object.
+		dataLayerPush({ ecommerce: null });
 		dataLayerPush({
 			event: 'logout',
 			channel: config.CHANNEL,
 			date: getCurrentDate(),
 			ecommerce: {
-				currencyCode: config.CURRENCY_CODE,
+				currency: config.CURRENCY_CODE,
 				profile: {
 					customerId: getCustomerIdFromGACookie(cid),
 					...transformUserProfile(profile),
 				},
 				consent: transformConsents(cookieConsents),
+				consentModeV2: transformConsentModeV2(cookieConsents),
 			},
 		});
 	},
@@ -155,34 +176,47 @@ export const createGtmBuilders = ({ config, dataLayerPush }) => ({
 			channel: config.CHANNEL,
 			date: getCurrentDate(),
 			ecommerce: {
-				currencyCode: config.CURRENCY_CODE,
+				currency: config.CURRENCY_CODE,
 				profile: transformUserProfile(profile),
 			},
 		});
 	},
 
+	// ─────────────────────────────────────────────────────────────────────────
+	// GA4 Ecommerce events
+	// All events below now use GA4 standard event names + ecommerce.items[] schema
+	// Reference: https://developers.google.com/analytics/devguides/collection/ga4/ecommerce
+	// ─────────────────────────────────────────────────────────────────────────
+
+	/**
+	 * GA4: select_item  (was: productClick)
+	 */
 	async productClick(productObj, productPosition, productReferrer = PRODUCT_REFERRER_SLUG.LIST) {
 		if (!productObj || !productObj.name || !productObj.sku) {
 			return;
 		}
 
+		dataLayerPush({ ecommerce: null });
 		dataLayerPush({
-			event: 'productClick',
+			event: 'select_item',
 			channel: config.CHANNEL,
 			date: getCurrentDate(),
 			ecommerce: {
-				currencyCode: config.CURRENCY_CODE,
-				actionField: { list: productReferrer },
-				click: {
-					products: [{
-						...transformProductItem(productObj),
-						position: productPosition,
-					}],
-				},
+				currency: config.CURRENCY_CODE,
+				item_list_name: productReferrer,
+				items: [{
+					...transformProductItem(productObj),
+					index: productPosition,
+					item_list_name: productReferrer,
+				}],
 			},
 		});
 	},
 
+	/**
+	 * GA4: view_cart  (was: viewCart — used to be step-based checkout)
+	 * Note: The “step” param is kept for GTM custom dim compat but no longer goes into actionField
+	 */
 	async viewCart(products, step) {
 		if (!products || !Array.isArray(products.productItems)) {
 			return;
@@ -190,87 +224,89 @@ export const createGtmBuilders = ({ config, dataLayerPush }) => ({
 
 		const actionName = checkoutEventName(step);
 
-		// Products items
-		const items = products.productItems.map((product) => {
-			return {
+		const items = [
+			...products.productItems.map((product) => ({
 				...transformProductItem(product),
-				list: product.list,
+				item_list_name: product.list,
 				a2cType: product.addToCartType,
-			};
-		});
-		// Bundle items
-		const bundleItems = transformBundleSetsItems(products.bundleSets);
-		// Freebie items
-		const freebieItems = products.freeGifts?.items?.map((product) => {
-			return {
+			})),
+			...transformBundleSetsItems(products.bundleSets),
+			...(products.freeGifts?.items?.map((product) => ({
 				...transformProductItem(product),
-				// Override product type
 				productType: PRODUCT_TYPE.FREEBIES,
-				list: product.list,
+				item_list_name: product.list,
 				a2cType: product.addToCartType,
-			};
-		}) ?? [];
+			})) ?? []),
+		];
 
-		dataLayerPush({ ecommerce: null }); // Clear the previous ecommerce object.
+		dataLayerPush({ ecommerce: null });
 		dataLayerPush({
-			event: 'viewCart',
+			event: 'view_cart',
 			channel: config.CHANNEL,
 			date: getCurrentDate(),
+			// Custom fields for internal step tracking
+			checkoutStep: step,
+			checkoutAction: actionName,
 			ecommerce: {
-				currencyCode: config.CURRENCY_CODE,
-				actionField: { step, action: actionName },
-				checkout: {
-					products: [
-						...items,
-						...bundleItems,
-						...freebieItems,
-					],
-					totalQuantities: products.totalQuantities,
-					subTotal: products.subTotal,
-					grandTotal: products.grandTotal,
-				},
+				currency: config.CURRENCY_CODE,
+				value: products.grandTotal ? convertSatangToBahtWithDecimal(products.grandTotal) : '0.00',
+				items,
+				// Custom summary fields
+				totalQuantities: products.totalQuantities,
+				subTotal: products.subTotal,
+				grandTotal: products.grandTotal,
 			},
 		});
 	},
 
+	/**
+	 * GA4: add_to_cart  (was: addToCart)
+	 */
 	async addToCart(products, productReferrer = PRODUCT_REFERRER_SLUG.LIST, a2cType = ADD_TO_CART_TYPE.STANDARD) {
 		if (!Array.isArray(products)) {
 			return;
 		}
 
+		dataLayerPush({ ecommerce: null });
 		dataLayerPush({
-			event: 'addToCart',
+			event: 'add_to_cart',
 			channel: config.CHANNEL,
 			a2cType,
 			date: getCurrentDate(),
 			ecommerce: {
-				currencyCode: config.CURRENCY_CODE,
-				actionField: { list: productReferrer },
-				add: {
-					products: products.map(transformProductItem),
-				},
+				currency: config.CURRENCY_CODE,
+				item_list_name: productReferrer,
+				items: products.map((p) => ({
+					...transformProductItem(p),
+					item_list_name: productReferrer,
+				})),
 			},
 		});
 	},
 
+	/**
+	 * GA4: remove_from_cart  (was: removeFromCart)
+	 */
 	async removeFromCart(products) {
 		if (!Array.isArray(products)) {
 			return;
 		}
 
+		dataLayerPush({ ecommerce: null });
 		dataLayerPush({
-			event: 'removeFromCart',
+			event: 'remove_from_cart',
 			channel: config.CHANNEL,
 			date: getCurrentDate(),
 			ecommerce: {
-				currencyCode: config.CURRENCY_CODE,
-				remove: {
-					products: products.map(transformProductItem),
-				},
+				currency: config.CURRENCY_CODE,
+				items: products.map(transformProductItem),
 			},
 		});
 	},
 
+	/**
+	 * GA4: begin_checkout  (was: checkout)
+	 */
 	async checkout(products, step, profile) {
 		if (!products || !Array.isArray(products.productItems)) {
 			return;
@@ -278,130 +314,123 @@ export const createGtmBuilders = ({ config, dataLayerPush }) => ({
 
 		const couponCode = products.coupons ? getCouponCode(products.coupons) : '';
 		const promotionName = products.promotions ? getPromotionName(products.promotions) : '';
-
 		const actionName = checkoutEventName(step);
 
-		// Products items
-		const items = products.productItems.map((product) => {
-			return {
+		const items = [
+			...products.productItems.map((product) => ({
 				...transformProductItem(product),
-				list: product.list,
+				item_list_name: product.list,
+				coupon: couponCode || undefined,
 				a2cType: product.addToCartType,
-			};
-		});
-		// Bundle items
-		const bundleItems = transformBundleSetsItems(products.bundleSets);
-		// Freebie items
-		const freebieItems = products.freeGifts?.items?.map((product) => {
-			return {
+			})),
+			...transformBundleSetsItems(products.bundleSets),
+			...(products.freeGifts?.items?.map((product) => ({
 				...transformProductItem(product),
-				// Override product type
 				productType: PRODUCT_TYPE.FREEBIES,
-				list: product.list,
+				item_list_name: product.list,
 				a2cType: product.addToCartType,
-			};
-		}) ?? [];
+			})) ?? []),
+		];
 
-		dataLayerPush({ ecommerce: null }); // Clear the previous ecommerce object.
+		dataLayerPush({ ecommerce: null });
 		dataLayerPush({
-			event: 'checkout',
+			event: 'begin_checkout',
 			channel: config.CHANNEL,
 			date: getCurrentDate(),
+			checkoutStep: step,
+			checkoutAction: actionName,
 			ecommerce: {
-				currencyCode: config.CURRENCY_CODE,
-				checkout: {
-					actionField: { step, option: products?.payment?.slug || products?.shipment?.method, action: actionName },
-					products: [
-						...items,
-						...bundleItems,
-						...freebieItems,
-					],
-					coupons: products.coupons,
-					profile: {
-						...transformUserProfile(profile),
-					},
-					discount: {
-						total: products.discount ? convertSatangToBahtWithDecimal(products.discount) : '0.00',
-						couponDiscount: products.couponDiscount ? convertSatangToBahtWithDecimal(products.couponDiscount) : '0.00',
-						couponCode,
-						promotionDiscount: products.promotionDiscount ? convertSatangToBahtWithDecimal(products.promotionDiscount) : '0.00',
-						promotionName,
-					},
-					totalQuantities: products.totalQuantities,
-					subTotal: products.subTotal,
-					grandTotal: products.grandTotal,
-					value: products.grandTotal ? convertSatangToBahtWithDecimal(products.grandTotal) : '0.00', // GA4
-					totalLine: getTotalLine(products),
+				currency: config.CURRENCY_CODE,
+				value: products.grandTotal ? convertSatangToBahtWithDecimal(products.grandTotal) : '0.00',
+				coupon: couponCode,
+				items,
+				// Custom discount breakdown
+				discount: {
+					total: products.discount ? convertSatangToBahtWithDecimal(products.discount) : '0.00',
+					couponDiscount: products.couponDiscount ? convertSatangToBahtWithDecimal(products.couponDiscount) : '0.00',
+					couponCode,
+					promotionDiscount: products.promotionDiscount ? convertSatangToBahtWithDecimal(products.promotionDiscount) : '0.00',
+					promotionName,
 				},
+				coupons: products.coupons,
+				profile: { ...transformUserProfile(profile) },
+				payment_type: products?.payment?.slug || products?.shipment?.method,
+				totalQuantities: products.totalQuantities,
+				subTotal: products.subTotal,
+				grandTotal: products.grandTotal,
+				totalLine: getTotalLine(products),
 			},
 		});
 	},
 
+	/**
+	 * GA4: purchase  (event name was already correct)
+	 * Ecommerce structure updated to GA4 flat format
+	 */
 	async purchase(orderDetail, profile) {
 		const couponCode = orderDetail.discount ? getCouponCode(orderDetail.discount.promotions) : '';
 		const promotionName = orderDetail.discount ? getPromotionName(orderDetail.discount.promotions) : '';
 
-		const totalQuantitiesReducer = (acc, cur) => {
-			return acc + (cur.quantity ?? 0);
-		};
+		const totalQuantitiesReducer = (acc, cur) => acc + (cur.quantity ?? 0);
 
-		dataLayerPush({ ecommerce: null }); // Clear the previous ecommerce object.
+		const items = orderDetail.items.map((productObj) => ({
+			...transformProductItem(productObj),
+			productStockStatus: 'in stock',
+			item_brand: productObj.brand,
+			brandId: productObj.brandId,
+			mainCategoryId: productObj.mainCategoryId,
+			mainCategoryName: productObj.categories?.[0]?.slug ?? '',
+			netAmount: convertSatangToBahtWithDecimal(productObj.netAmount),
+			item_list_name: productObj.list,
+			a2cType: productObj.addToCartType,
+			preorderStatus: productObj.preOrder ? 'on' : 'off',
+			price: orderDetailProductPrice(productObj),
+			...(productObj.type === PRODUCT_TYPE.FREEBIE && { productType: PRODUCT_TYPE.FREEBIES }),
+			...(productObj?.bundleName && { bundleName: productObj?.bundleName }),
+		}));
+
+		dataLayerPush({ ecommerce: null });
 		dataLayerPush({
 			event: 'purchase',
 			channel: config.CHANNEL,
 			date: getCurrentDate(),
 			ecommerce: {
-				currencyCode: config.CURRENCY_CODE,
-				purchase: {
-					actionField: {
-						id: orderDetail.id,
-						affiliation: 'Online Store',
-						revenue: convertSatangToBahtWithDecimal(orderDetail.grandTotal),
-						shipping: convertSatangToBahtWithDecimal(orderDetail.shippingFee),
-						discount: orderDetail.discount?.totalAmount ? convertSatangToBahtWithDecimal(orderDetail.discount?.totalAmount) : '0.00',
-						couponDiscount: orderDetail.couponDiscount ? convertSatangToBahtWithDecimal(orderDetail.couponDiscount) : '0.00',
-						couponCode,
-						promotionDiscount: orderDetail.promotionDiscount ? convertSatangToBahtWithDecimal(orderDetail.promotionDiscount) : '0.00',
-						promotionName,
-					},
-					payment: transformPurchasePayment(orderDetail.paymentMethod),
-					remainingPayment: transformPurchasePayment(orderDetail.remainingPaymentMethod),
-					shippingAddresses: orderDetail.addresses.shipping,
-					billingAddresses: orderDetail.addresses.billing,
-					taxInvoiceAddresses: orderDetail.addresses.taxInvoice,
-					coupons: orderDetail.coupons,
-					products: orderDetail.items.map((productObj) => {
-						return {
-							...transformProductItem(productObj),
-							// Overide transform product item
-							productStockStatus: 'in stock',
-							brandId: productObj.brandId,
-							mainCategoryId: productObj.mainCategoryId,
-							mainCategoryName: productObj.categories?.[0]?.slug ?? '',
-							netAmount: convertSatangToBahtWithDecimal(productObj.netAmount),
-							list: productObj.list,
-							a2cType: productObj.addToCartType,
-							preorderStatus: productObj.preOrder ? 'on' : 'off', // “on” or “off”
-
-							// GA4 purchase event
-							price: orderDetailProductPrice(productObj),
-							...(productObj.type === PRODUCT_TYPE.FREEBIE && { productType: PRODUCT_TYPE.FREEBIES }), // Overide if type is freebie
-							...(productObj?.bundleName && { bundleName: productObj?.bundleName }),
-						};
-					}),
-					totalQuantities: orderDetail.items.reduce(totalQuantitiesReducer, 0),
-					subTotal: orderDetail.subtotal,
-					grandTotal: orderDetail.grandTotal,
-					shippingFee: orderDetail.shippingFee,
-					totalLine: orderDetail.items?.length ?? 0,
+				// ── GA4 standard purchase fields ────────────────────────────
+				transaction_id: orderDetail.id,
+				affiliation:    'Online Store',
+				currency:       config.CURRENCY_CODE,
+				value:          convertSatangToBahtWithDecimal(orderDetail.grandTotal),
+				shipping:       convertSatangToBahtWithDecimal(orderDetail.shippingFee),
+				coupon:         couponCode,
+				tax:            '0.00', // set if tax data available
+				items,
+				// ── Custom fields ────────────────────────────────────────────
+				discount: {
+					total:             orderDetail.discount?.totalAmount ? convertSatangToBahtWithDecimal(orderDetail.discount.totalAmount) : '0.00',
+					couponDiscount:    orderDetail.couponDiscount ? convertSatangToBahtWithDecimal(orderDetail.couponDiscount) : '0.00',
+					couponCode,
+					promotionDiscount: orderDetail.promotionDiscount ? convertSatangToBahtWithDecimal(orderDetail.promotionDiscount) : '0.00',
+					promotionName,
 				},
-				profile: {
-					...transformUserProfile(profile),
-				},
+				payment:          transformPurchasePayment(orderDetail.paymentMethod),
+				remainingPayment: transformPurchasePayment(orderDetail.remainingPaymentMethod),
+				shippingAddresses:    orderDetail.addresses.shipping,
+				billingAddresses:     orderDetail.addresses.billing,
+				taxInvoiceAddresses:  orderDetail.addresses.taxInvoice,
+				coupons:         orderDetail.coupons,
+				profile:         { ...transformUserProfile(profile) },
+				totalQuantities: orderDetail.items.reduce(totalQuantitiesReducer, 0),
+				subTotal:        orderDetail.subtotal,
+				grandTotal:      orderDetail.grandTotal,
+				shippingFee:     orderDetail.shippingFee,
+				totalLine:       orderDetail.items?.length ?? 0,
 			},
 		});
 	},
 
+	/**
+	 * GA4: purchase (per-item)  — purchaseItem is a custom event, no GA4 equivalent
+	 */
 	async purchaseItem(productItem, orderId, profile) {
 		if (!orderId) {
 			return;
@@ -411,96 +440,89 @@ export const createGtmBuilders = ({ config, dataLayerPush }) => ({
 			event: 'purchaseItem',
 			channel: config.CHANNEL,
 			ecommerce: {
-				currencyCode: config.CURRENCY_CODE,
-				purchase: {
-					actionField: {
-						id: orderId,
-						affiliation: 'Online Store',
-					},
-					product: {
-						...transformProductItem(productItem),
-						brandId: productItem.brandId,
-						mainCategoryId: productItem.mainCategoryId,
-						mainCategoryName: productItem.categories?.[0]?.slug ?? '',
-						netAmount: convertSatangToBahtWithDecimal(productItem.netAmount),
-					},
-				},
-				profile: {
-					...transformUserProfile(profile),
-				},
+				currency: config.CURRENCY_CODE,
+				transaction_id: orderId,
+				affiliation: 'Online Store',
+				items: [{
+					...transformProductItem(productItem),
+					brandId: productItem.brandId,
+					mainCategoryId: productItem.mainCategoryId,
+					mainCategoryName: productItem.categories?.[0]?.slug ?? '',
+					netAmount: convertSatangToBahtWithDecimal(productItem.netAmount),
+				}],
+				profile: { ...transformUserProfile(profile) },
 			},
 		});
 	},
 
+	/**
+	 * GA4: view_item_list  (was: productImpression / impressions)
+	 */
 	async productImpression(productList, app, productReferrer = PRODUCT_REFERRER_SLUG.LIST) {
-		const perChunk = 8; // items per chunk
+		const perChunk = 8;
 
-		// ref:: https://stackoverflow.com/questions/8495687/split-array-into-chunks
-		const result = productList.reduce((resultArray, item, index) => {
+		const chunks = productList.reduce((acc, item, index) => {
 			const chunkIndex = Math.floor(index / perChunk);
-
-			if (!resultArray[chunkIndex]) {
-				resultArray[chunkIndex] = []; // start a new chunk
-			}
-
-			resultArray[chunkIndex].push(item);
-
-			return resultArray;
+			if (!acc[chunkIndex]) acc[chunkIndex] = [];
+			acc[chunkIndex].push(item);
+			return acc;
 		}, []);
 
-		dataLayerPush({ ecommerce: null }); // Clear the previous ecommerce object.
-		result.forEach((products, chunkIndex) => {
+		dataLayerPush({ ecommerce: null });
+		chunks.forEach((products, chunkIndex) => {
 			dataLayerPush({
-				event: 'impressions',
+				event: 'view_item_list',
 				channel: config.CHANNEL,
 				date: getCurrentDate(),
 				ecommerce: {
-					currencyCode: config.CURRENCY_CODE,
-					impressions: products.map((product, index) => {
-						return {
-							...transformProductItem(product),
-							// TODO: Need a discussion further with client.
-							// list: 'Apparel Gallery',
-							position: (chunkIndex * perChunk) + index + 1,
-							url: productURL(product, app),
-							list: productReferrer, // * Where the item came from
-						};
-					}),
+					currency: config.CURRENCY_CODE,
+					item_list_name: productReferrer,
+					items: products.map((product, index) => ({
+						...transformProductItem(product),
+						index: (chunkIndex * perChunk) + index + 1,
+						item_list_name: productReferrer,
+						url: productURL(product, app, config.PRODUCT_DETAIL_ROUTE_NAME),
+					})),
 				},
 			});
 		});
 	},
 
+	/**
+	 * GA4: view_item  (was: productDetailImpression / productDetail)
+	 */
 	async productDetailImpression(productDetail, url, productReferrer = PRODUCT_REFERRER_SLUG.LIST) {
-		dataLayerPush({ ecommerce: null }); // Clear the previous ecommerce object.
+		dataLayerPush({ ecommerce: null });
 		dataLayerPush({
-			event: 'productDetail',
+			event: 'view_item',
 			channel: config.CHANNEL,
 			date: getCurrentDate(),
 			ecommerce: {
-				currencyCode: config.CURRENCY_CODE,
-				detail: {
-					actionField: { list: productReferrer },
-					products: [{
-						...transformProductItem(productDetail),
-						availableStock: productDetail.availableStock,
-						url,
-					}],
-				},
+				currency: config.CURRENCY_CODE,
+				item_list_name: productReferrer,
+				items: [{
+					...transformProductItem(productDetail),
+					item_list_name: productReferrer,
+					availableStock: productDetail.availableStock,
+					url,
+				}],
 			},
 		});
 	},
 
+	/**
+	 * GA4: search  (event name kept; added search_term field per GA4 standard)
+	 */
 	async search(keyword, suggestionList) {
 		dataLayerPush({
 			event: 'search',
 			channel: config.CHANNEL,
 			date: getCurrentDate(),
+			search_term: keyword,         // GA4 standard parameter
 			ecommerce: {
-				currencyCode: config.CURRENCY_CODE,
+				currency: config.CURRENCY_CODE,
 				keyword,
-				// return array of name
-				suggestions: suggestionList?.map((item) => (item.text)) || [],
+				suggestions: suggestionList?.map((item) => item.text) || [],
 			},
 		});
 	},

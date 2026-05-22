@@ -39,12 +39,20 @@ export const orderDetailProductPrice = (productObj) => {
 
 /**
  * Transform Product Item
+ *
+ * Output uses GA4-standard field names (item_id, item_name, item_brand, item_category, index)
+ * as primary keys, with legacy UA names kept alongside for backward compat during migration.
+ *
+ * GA4 reference: https://developers.google.com/analytics/devguides/collection/ga4/reference/events#view_item_list
+ *
  * @param {Object} productItem product item data
  * @return {ProductItemDataLayer}
  */
 export const transformProductItem = (productItem) => {
 	const sellingPrice = convertSatangToBahtWithDecimal(productItem.sellingPrice ?? productItem.priceSelling);
 	const srpPrice = convertSatangToBahtWithDecimal(productItem.srpPrice ?? productItem.priceSrp);
+	const resolvedPrice = productPrice(productItem);
+	const resolvedCategory = productCategory(productItem.categories?.[0]);
 
 	let productStockStatus = productItem.isInStock || productItem.availableStock ? 'in stock' : 'out of stock';
 	if (productItem?.hasCollectAtStore) {
@@ -52,22 +60,31 @@ export const transformProductItem = (productItem) => {
 	}
 
 	return {
-		id: productItem.sku,
-		appleId: productItem.appleSku || null,
-		title: productItem.name, // Name or ID is required.
-		name: productItem.name, // GA4
-		brand: productItem.brand,
-		image: productItem.image,
-		preorderStatus: productItem.isPreOrder || productItem.preOrder || productItem.type ? 'on' : 'off', // “on” or “off”
+		// ── GA4 standard fields ──────────────────────────────────────────────
+		item_id:       productItem.sku,           // GA4: required
+		item_name:     productItem.name,           // GA4: required
+		item_brand:    productItem.brand,
+		item_category: resolvedCategory,
+		price:         resolvedPrice,
+		quantity:      productItem.quantity ?? 1,
+
+		// ── Custom / business fields (GTM variables / BigQuery) ──────────────
+		appleId:         productItem.appleSku || null,
+		image:           productItem.image,
+		preorderStatus:  productItem.isPreOrder || productItem.preOrder || productItem.type ? 'on' : 'off',
 		productStockStatus,
-		productType: PRODUCT_TYPE.NORMAL, // “Freebies” or “Normal”
-		category: productCategory(productItem.categories?.[0]),
-		breadcrumb: `home/${productCategory(productItem.categories?.[0])}`,
-		price: productPrice(productItem),
+		productType:     PRODUCT_TYPE.NORMAL, // “Freebies” or “Normal”
+		breadcrumb:      `home/${resolvedCategory}`,
 		sellingPrice,
 		srpPrice,
-		savePrice: convertSatangToBahtWithDecimal(productItem.savePrice),
-		quantity: productItem.quantity,
+		savePrice:       convertSatangToBahtWithDecimal(productItem.savePrice),
+
+		// ── Legacy UA field aliases (keep until GTM tags are fully migrated) ─
+		// @deprecated — use item_id, item_name, item_brand, item_category instead
+		id:       productItem.sku,
+		name:     productItem.name,
+		brand:    productItem.brand,
+		category: resolvedCategory,
 	};
 };
 

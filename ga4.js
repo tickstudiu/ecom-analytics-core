@@ -1,5 +1,6 @@
 
 import { transformConsents, transformUserProfile } from './resolvers/customer';
+import { transformConsentModeV2 } from './helpers/consent';
 
 import { getCustomerIdFromGACookie } from './helpers/ga';
 import PDPA_KEYS from './enums/pdpaKeys';
@@ -188,7 +189,12 @@ export const createGa4Builders = ({ config, dataLayerPush, $cookies }) => ({
 				...transformUserProfile(profile),
 				rank: profile.rank || CUSTOMER_CORPORATE_RANK.MEMBER,
 			},
+			// Legacy PDPA consent object
 			consent: transformConsents(cookieConsents),
+			// Consent Mode v2 signals (used by GTM Consent settings)
+			consentModeV2: transformConsentModeV2(cookieConsents),
+			// GA4 enhanced conversions: set user_id at page level
+			user_id: profile.id ? String(profile.id) : undefined,
 		});
 	},
 
@@ -715,28 +721,26 @@ export const createGa4Builders = ({ config, dataLayerPush, $cookies }) => ({
 	// #endregion
 
 	// #region ?. Event Tracking - Wishlist
+	/**
+	 * GA4 standard: add_to_wishlist
+	 */
 	async onAddToWishList(product) {
 		dataLayerPush({
-			event: 'eventTracking - Wishlist',
+			event: 'add_to_wishlist',          // GA4 standard event name
 			channel: config.CHANNEL,
-			eventName: 'on_add_to_wish_list',
-			eventCategory: null,
-			eventLabel: null,
-			eventValue: null,
-
+			eventName: 'on_add_to_wish_list',  // keep for legacy GTM trigger compat
 			// additional data
 			product,
 		});
 	},
+	/**
+	 * GA4 standard: remove_from_wishlist
+	 */
 	async onRemoveFromWishList(product) {
 		dataLayerPush({
-			event: 'eventTracking - Wishlist',
+			event: 'remove_from_wishlist',          // GA4 standard event name
 			channel: config.CHANNEL,
-			eventName: 'on_remove_from_wish_list',
-			eventCategory: null,
-			eventLabel: null,
-			eventValue: null,
-
+			eventName: 'on_remove_from_wish_list',  // keep for legacy GTM trigger compat
 			// additional data
 			product,
 		});

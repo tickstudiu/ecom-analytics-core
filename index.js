@@ -19,6 +19,11 @@ export { convertSatangToBaht, convertSatangToBahtWithDecimal } from './helpers/n
 export { getProductDetailRouteObject } from './helpers/route';
 export { getCustomerIdFromGACookie } from './helpers/ga';
 export { dateTimeFormat } from './helpers/date';
+export {
+	transformConsentModeV2,
+	buildConsentUpdatePayload,
+	buildConsentDefaultPayload,
+} from './helpers/consent';
 
 // Enums
 export { default as ADD_TO_CART_ACTION_TYPE } from './enums/addToCartActionType';
