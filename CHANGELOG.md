@@ -1,8 +1,81 @@
 # Changelog
 
+All notable changes to `@tickstudiu/ecom-analytics-core` will be documented here.
+
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+Versioning follows [Semantic Versioning](https://semver.org/).
+
+---
+
 ## [2.2.0] — 2026-05-26
 
-### Breaking Changes
+### ⚠️ Breaking Changes
+
+- **Removed `createGaBuilders`** — Universal Analytics (GA3) was sunset by Google on July 1, 2023. The factory and all UA-specific helpers (`gaWrapper`, `gaEvent` string-concatenation format) have been deleted.
+  - **Migration**: All methods previously in `createGaBuilders` have been available in `createGa4Builders` since v2.1.0 with the same method names. Update `analytics-plugin.js` to point `$gaEvent` to the `createGa4Builders` instance.
+  - Affected projects: `bnn-bnn.in.th`, `app-storefront`, `ustore-ecom` — all migrated.
+
+### Added
+
+- **`consentDefault()`** in `createGtmBuilders` — fires a safe "all denied" Consent Mode v2 payload (`consent_default`) before any GTM tag loads. Must be called once on SSR init (analytics-plugin.js), not on the client.
+- **`consentUpdate(cookieConsents)`** in `createGtmBuilders` — fires `consent_update` when the user changes PDPA settings.
+- **`productAddWishlist(product, profile, wishlistAction)`** in `createGtmBuilders` — pushes `add_to_wishlist` or `remove_from_wishlist` GA4 ecommerce event.
+- **`couponsApplied(couponCode)`** in `createGtmBuilders` — pushes `coupon_applied` GA4 event.
+- **`couponsRemoved(couponCode)`** in `createGtmBuilders` — pushes `coupon_removed` GA4 event.
+
+### Changed
+
+- `analytics-plugin.js` (all 3 projects): `$gaEvent` now aliases to the same `createGa4Builders` instance — zero call-site changes required across all projects.
+- `app-storefront/plugins/analytics/ga-extensions.js` — fully rewritten from UA `gaWrapper` format to GA4 named-parameter format (`eventTracking - Drawer`, `eventTracking - MiniCart`, `eventTracking - Widget`).
+- `app-storefront/plugins/analytics/ga.js` — **deleted** (was the UA `createGaBuilders` stub).
+- `ustore-ecom/plugins/analytics/ga-extensions.js` — **deleted** (was an empty stub).
+
+### Fixed
+
+- Consent Mode v2 double-fire: `analytics-plugin.client.js` (all projects) no longer fires `consent_default` directly — handled entirely by `consentDefault()` in the SSR plugin.
+
+### Tests
+
+- Added full Jest + Babel test suite: **233 tests across 10 suites**.
+  - `tests/unit/helpers/` — numeral, consent, ga, route
+  - `tests/unit/resolvers/` — customer, order
+  - `tests/integration/` — gtm builder, ga4 builder, payload snapshots (10 snapshots)
+  - `tests/contract/` — API surface contract (exports)
+- Snapshot tests freeze payload shape for: `login`, `register`, `select_item`, `add_to_cart`, `begin_checkout`, `purchase`, `consent_default`, `consent_update`, `userData`, `onRegistrationCompleted`.
+
+---
+
+## [2.1.0]
+
+### Fixed
+
+- **`preorderStatus` bug** — `transformProductItem` previously used `|| productItem.type` causing every product to report `preorderStatus: 'on'`. Fixed to check only `isPreOrder || preOrder`.
+- **`convertSatangToBahtWithDecimal(0)` regression** — `!0` evaluated to `true`, causing free/zero-price items to return `null` instead of `"0.00"`. Fixed with `value == null` guard.
+
+### Changed
+
+- `transformProductItem` output now uses **GA4 standard field names**: `item_id`, `item_name`, `item_brand`, `item_category`. Legacy UA aliases (`id`, `name`, `brand`, `category`) removed.
+
+---
+
+## [2.0.0]
+
+### Added
+
+- `createGa4Builders` — GA4 event builder factory (130+ methods).
+- `transformConsentModeV2` — maps PDPA consent to Google Consent Mode v2 signals.
+- `buildConsentDefaultPayload` / `buildConsentUpdatePayload` helpers.
+- All enums exported from `index.js`.
+
+### Changed
+
+- `createGtmBuilders` updated to GA4 ecommerce event names: `select_item`, `add_to_cart`, `remove_from_cart`, `view_cart`, `begin_checkout`, `purchase`.
+
+---
+
+## [1.x] — Legacy
+
+- `createGaBuilders` — Universal Analytics (GA3) factory. **Removed in v2.2.0.**
 
 #### `ga.js` / `createGaBuilders` deprecated — all events migrated to `createGa4Builders`
 

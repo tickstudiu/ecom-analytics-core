@@ -1,0 +1,367 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Payload snapshots — GA4 builder onRegistrationCompleted matches snapshot (sensitive fields stripped) 1`] = `
+{
+  "channel": "online",
+  "consent": {
+    "ANALYTICAL": false,
+    "FUNCTIONAL": false,
+    "MARKETING": false,
+  },
+  "event": "eventTracking",
+  "eventCategory": null,
+  "eventLabel": null,
+  "eventName": "on_registration_completed",
+  "eventValue": null,
+  "form": {
+    "email": "new@example.com",
+    "phoneNumber": "0812345678",
+  },
+  "provider": "email",
+}
+`;
+
+exports[`Payload snapshots — GA4 builder userData matches snapshot 1`] = `
+{
+  "channel": "online",
+  "consent": {
+    "ANALYTICAL": {
+      "name": "ANALYTICAL",
+      "value": true,
+    },
+    "FUNCTIONAL": {
+      "name": "FUNCTIONAL",
+      "value": true,
+    },
+    "MARKETING": {
+      "name": "MARKETING",
+      "value": false,
+    },
+  },
+  "consentModeV2": {
+    "ad_personalization": "denied",
+    "ad_storage": "granted",
+    "ad_user_data": "granted",
+    "analytics_storage": "granted",
+    "functionality_storage": "granted",
+    "security_storage": "granted",
+  },
+  "event": "userData",
+  "page": "home",
+  "profile": {
+    "birthdate": "1990-01-15",
+    "customerId": "123456789.1642576494",
+    "email": "test@example.com",
+    "firstname": "สมชาย",
+    "group": "email",
+    "id": 42,
+    "lastname": "ใจดี",
+    "method": "MEMBER",
+    "phoneNumber": "0812345678",
+    "provider": "email",
+    "rank": "GOLD",
+    "referenceId": "ref-001",
+    "transacted": true,
+    "type": "GOLD",
+  },
+  "user_id": "42",
+}
+`;
+
+exports[`Payload snapshots — GTM builder addToCart matches snapshot 1`] = `
+{
+  "a2cType": "standard",
+  "channel": "online",
+  "date": "2024-01-15 10:00:00",
+  "ecommerce": {
+    "currency": "THB",
+    "item_list_name": "list",
+    "items": [
+      {
+        "appleId": null,
+        "breadcrumb": "home/smartphones/apple/iphone",
+        "image": "https://cdn.example.com/iphone16pro.jpg",
+        "item_brand": "Apple",
+        "item_category": "smartphones/apple/iphone",
+        "item_id": "APP-SKU-001",
+        "item_list_name": "list",
+        "item_name": "iPhone 16 Pro",
+        "preorderStatus": "off",
+        "price": "100.00",
+        "productStockStatus": "in stock",
+        "productType": "Normal",
+        "quantity": 1,
+        "savePrice": "20.00",
+        "sellingPrice": "100.00",
+        "srpPrice": "120.00",
+      },
+    ],
+  },
+  "event": "add_to_cart",
+}
+`;
+
+exports[`Payload snapshots — GTM builder checkout (begin_checkout) matches snapshot 1`] = `
+{
+  "channel": "online",
+  "checkoutAction": "shipping",
+  "checkoutStep": 2,
+  "date": "2024-01-15 10:00:00",
+  "discount": {
+    "couponCode": "",
+    "couponDiscount": "0.00",
+    "promotionDiscount": "0.00",
+    "promotionName": "",
+    "total": "0.00",
+  },
+  "ecommerce": {
+    "coupon": "",
+    "currency": "THB",
+    "items": [
+      {
+        "a2cType": "standard",
+        "appleId": null,
+        "breadcrumb": "home/smartphones/apple/iphone",
+        "coupon": undefined,
+        "image": "https://cdn.example.com/iphone16pro.jpg",
+        "item_brand": "Apple",
+        "item_category": "smartphones/apple/iphone",
+        "item_id": "APP-SKU-001",
+        "item_list_name": "list",
+        "item_name": "iPhone 16 Pro",
+        "preorderStatus": "off",
+        "price": "100.00",
+        "productStockStatus": "in stock",
+        "productType": "Normal",
+        "quantity": 1,
+        "savePrice": "20.00",
+        "sellingPrice": "100.00",
+        "srpPrice": "120.00",
+      },
+    ],
+    "value": "100.00",
+  },
+  "event": "begin_checkout",
+  "grandTotal": 10000,
+  "payment_type": undefined,
+  "profile": {
+    "birthdate": "1990-01-15",
+    "email": "test@example.com",
+    "firstname": "สมชาย",
+    "group": "email",
+    "id": 42,
+    "lastname": "ใจดี",
+    "method": "MEMBER",
+    "phoneNumber": "0812345678",
+    "provider": "email",
+    "referenceId": "ref-001",
+    "transacted": true,
+    "type": "GOLD",
+  },
+  "subTotal": 10000,
+  "totalLine": 1,
+  "totalQuantities": 1,
+}
+`;
+
+exports[`Payload snapshots — GTM builder consentDefault matches snapshot 1`] = `
+{
+  "ad_personalization": "denied",
+  "ad_storage": "denied",
+  "ad_user_data": "denied",
+  "analytics_storage": "denied",
+  "event": "consent_default",
+  "functionality_storage": "granted",
+  "security_storage": "granted",
+  "wait_for_update": 500,
+}
+`;
+
+exports[`Payload snapshots — GTM builder consentUpdate (all granted) matches snapshot 1`] = `
+{
+  "ad_personalization": "denied",
+  "ad_storage": "granted",
+  "ad_user_data": "granted",
+  "analytics_storage": "granted",
+  "event": "consent_update",
+  "functionality_storage": "granted",
+  "security_storage": "granted",
+}
+`;
+
+exports[`Payload snapshots — GTM builder login matches snapshot 1`] = `
+{
+  "channel": "online",
+  "consent": {
+    "ANALYTICAL": {
+      "name": "ANALYTICAL",
+      "value": true,
+    },
+    "FUNCTIONAL": {
+      "name": "FUNCTIONAL",
+      "value": true,
+    },
+    "MARKETING": {
+      "name": "MARKETING",
+      "value": false,
+    },
+  },
+  "consentModeV2": {
+    "ad_personalization": "denied",
+    "ad_storage": "granted",
+    "ad_user_data": "granted",
+    "analytics_storage": "granted",
+    "functionality_storage": "granted",
+    "security_storage": "granted",
+  },
+  "date": "2024-01-15 10:00:00",
+  "event": "login",
+  "profile": {
+    "birthdate": "1990-01-15",
+    "customerId": "123456789.1642576494",
+    "email": "test@example.com",
+    "firstname": "สมชาย",
+    "group": "email",
+    "id": 42,
+    "lastname": "ใจดี",
+    "method": "MEMBER",
+    "phoneNumber": "0812345678",
+    "provider": "email",
+    "referenceId": "ref-001",
+    "transacted": true,
+    "type": "GOLD",
+  },
+}
+`;
+
+exports[`Payload snapshots — GTM builder productClick (select_item) matches snapshot 1`] = `
+{
+  "channel": "online",
+  "date": "2024-01-15 10:00:00",
+  "ecommerce": {
+    "currency": "THB",
+    "item_list_name": "list",
+    "items": [
+      {
+        "appleId": null,
+        "breadcrumb": "home/smartphones/apple/iphone",
+        "image": "https://cdn.example.com/iphone16pro.jpg",
+        "index": 1,
+        "item_brand": "Apple",
+        "item_category": "smartphones/apple/iphone",
+        "item_id": "APP-SKU-001",
+        "item_list_name": "list",
+        "item_name": "iPhone 16 Pro",
+        "preorderStatus": "off",
+        "price": "100.00",
+        "productStockStatus": "in stock",
+        "productType": "Normal",
+        "quantity": 1,
+        "savePrice": "20.00",
+        "sellingPrice": "100.00",
+        "srpPrice": "120.00",
+      },
+    ],
+  },
+  "event": "select_item",
+}
+`;
+
+exports[`Payload snapshots — GTM builder purchase matches snapshot 1`] = `
+{
+  "channel": "online",
+  "date": "2024-01-15 10:00:00",
+  "discount": {
+    "couponCode": "",
+    "couponDiscount": "0.00",
+    "promotionDiscount": "0.00",
+    "promotionName": "",
+    "total": "0.00",
+  },
+  "ecommerce": {
+    "affiliation": "Online Store",
+    "coupon": "",
+    "currency": "THB",
+    "items": [
+      {
+        "a2cType": undefined,
+        "appleId": null,
+        "brandId": "brand-apple",
+        "breadcrumb": "home/smartphones/apple/iphone",
+        "image": "https://cdn.example.com/iphone16pro.jpg",
+        "item_brand": "Apple",
+        "item_category": "smartphones/apple/iphone",
+        "item_id": "APP-SKU-001",
+        "item_list_name": "list",
+        "item_name": "iPhone 16 Pro",
+        "mainCategoryId": "cat-smartphones",
+        "mainCategoryName": "iphone",
+        "netAmount": "100.00",
+        "preorderStatus": "off",
+        "price": "100.00",
+        "productStockStatus": "in stock",
+        "productType": "Normal",
+        "quantity": 1,
+        "savePrice": "20.00",
+        "sellingPrice": "100.00",
+        "srpPrice": "120.00",
+      },
+    ],
+    "shipping": "0.00",
+    "tax": "0.00",
+    "transaction_id": "ORDER-20240115-001",
+    "value": "100.00",
+  },
+  "event": "purchase",
+  "grandTotal": 10000,
+  "payment": {
+    "channel": "Credit Card",
+    "date": "2024-01-15",
+    "method": "Visa",
+    "name": "Card Payment",
+    "slug": "credit-card",
+    "status": "paid",
+  },
+  "profile": {
+    "birthdate": "1990-01-15",
+    "email": "test@example.com",
+    "firstname": "สมชาย",
+    "group": "email",
+    "id": 42,
+    "lastname": "ใจดี",
+    "method": "MEMBER",
+    "phoneNumber": "0812345678",
+    "provider": "email",
+    "referenceId": "ref-001",
+    "transacted": true,
+    "type": "GOLD",
+  },
+  "remainingPayment": null,
+  "shippingFee": 0,
+  "subTotal": 10000,
+  "totalLine": 1,
+  "totalQuantities": 1,
+}
+`;
+
+exports[`Payload snapshots — GTM builder register matches snapshot 1`] = `
+{
+  "channel": "online",
+  "date": "2024-01-15 10:00:00",
+  "event": "register",
+  "profile": {
+    "birthdate": "1990-01-15",
+    "email": "test@example.com",
+    "firstname": "สมชาย",
+    "group": "email",
+    "id": 42,
+    "lastname": "ใจดี",
+    "method": "MEMBER",
+    "phoneNumber": "0812345678",
+    "provider": "email",
+    "referenceId": "ref-001",
+    "transacted": true,
+    "type": "GOLD",
+  },
+}
+`;
