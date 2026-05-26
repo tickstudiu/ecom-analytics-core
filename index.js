@@ -16,7 +16,18 @@ export {
 
 // Helpers
 // gaWrapper removed in v2.2.0 (UA-only helper)
-export { convertSatangToBaht, convertSatangToBahtWithDecimal } from './helpers/numeral';
+export {
+	convertSatangToBaht,
+	convertSatangToBahtWithDecimal,
+	convertBahtToSatang,
+	priceFormat,
+	priceBathFormat,
+	discountedPriceFormat,
+	numberFormat,
+	positiveOnly,
+	distanceFormat,
+	formatToE164,
+} from './helpers/numeral';
 export { getProductDetailRouteObject } from './helpers/route';
 export { getCustomerIdFromGACookie } from './helpers/ga';
 export { dateTimeFormat } from './helpers/date';
