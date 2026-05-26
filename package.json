@@ -1,7 +1,7 @@
 {
   "name": "@tickstudiu/ecom-analytics-core",
-  "version": "2.0.0",
-  "description": "Shared GTM / GA4 / GA analytics builders for comseven projects",
+  "version": "2.2.0",
+  "description": "Shared GTM / GA4 analytics builders for comseven projects",
   "main": "index.js",
   "repository": {
     "type": "git",
@@ -20,5 +20,9 @@
     "big.js": ">=6.0.0",
     "dayjs": ">=1.0.0"
   },
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "big.js": "^7.0.1",
+    "dayjs": "^1.11.20"
+  }
 }

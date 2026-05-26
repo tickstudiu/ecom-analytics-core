@@ -1,7 +1,7 @@
 // Builders
 export { createGtmBuilders } from './gtm';
 export { createGa4Builders } from './ga4';
-export { createGaBuilders } from './ga';
+// createGaBuilders (Universal Analytics) removed in v2.2.0 — GA was sunset July 2023
 
 // Resolvers
 export { transformUserProfile, transformConsents } from './resolvers/customer';
@@ -15,6 +15,7 @@ export {
 } from './resolvers/order';
 
 // Helpers
+// gaWrapper removed in v2.2.0 (UA-only helper)
 export { convertSatangToBaht, convertSatangToBahtWithDecimal } from './helpers/numeral';
 export { getProductDetailRouteObject } from './helpers/route';
 export { getCustomerIdFromGACookie } from './helpers/ga';

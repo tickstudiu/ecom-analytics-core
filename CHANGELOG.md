@@ -1,5 +1,119 @@
 # Changelog
 
+## [2.2.0] — 2026-05-26
+
+### Breaking Changes
+
+#### `ga.js` / `createGaBuilders` deprecated — all events migrated to `createGa4Builders`
+
+Universal Analytics was shut down by Google on **1 July 2023**. Every event pushed via `createGaBuilders` has been going nowhere since then.
+
+All 100+ methods have been migrated to `createGa4Builders` (`ga4.js`) using clean GA4 named parameters instead of string-concatenated `eventCategory/Action/Label/Value`.
+
+**Migration (one-line change per project):**
+```js
+// Before
+const dataLayer = createGaBuilders({ config, dataLayerPush });
+
+// After
+const dataLayer = createGa4Builders({ config, dataLayerPush, $cookies });
+```
+Method names are preserved — no call-site changes required.
+
+**Removed exports from `index.js`:**
+- `createGaBuilders` — use `createGa4Builders`
+- `gaWrapper` — no replacement needed (UA-only utility)
+
+`ga.js` is now a deprecation stub (warns in non-production) and will be deleted in **v3.0.0**.
+
+#### New event format — named parameters instead of string concatenation
+
+GA4 custom events now use flat named parameters, which are directly readable as GA4 custom dimensions in BigQuery and the GA4 UI. Examples:
+
+| Old (UA string) | New (GA4 named params) |
+|---|---|
+| `eventCategory: 'PP{sku}_AddToCart'` | `sku: product.sku` |
+| `eventCategory: 'PL_{slug}_select'` | `sku, categoryPageSlug` |
+| `eventCategory: 'Storelocation'` + `eventAction: 'click'` | `eventName: 'view_store', storeName, storeAddress` |
+
+**GTM container updates required for 3 projects:**
+1. Add new GA4 Event tags triggered by the new `eventTracking - *` event names.
+2. Map variables from `{{DLV - sku}}`, `{{DLV - branchName}}` etc. (no more string parsing in GTM).
+3. Remove old UA tags (they no longer fire).
+
+### New events added to `createGa4Builders`
+
+Previously only available in `createGaBuilders` (UA) — now available in GA4 format:
+
+- **Homepage:** `homeWidgetClicked`, `homeWidgetSwipe`, `homeWidgetClickedViewAll`, `flashSaleAddToCart`, `flashSaleSeeMore`
+- **Header/Footer:** `headerSearch`, `loginAttempt`, `switchLanguage`, `headerStoreLocationClicked`, `mainHeaderLogoClicked`, `footerSocialClicked`
+- **PDPA:** `pdpaBarAction`
+- **Contact:** `contactUsFormSubmit`, `contactUsCallCenter`
+- **Store:** `storeLocationStoreViewed`, `storeLocationSelectProvince`
+- **Product List:** `plProductClicked`, `plProductSorted`, `plProductPaginationNextPrevClicked`, `plFilterChanged`, `plFilterShowInStockOnly`, `plExpand`
+- **Product Detail:** `pdVariantSelected`, `pdBundleSelected`, `pdBundleBuy`, `pdViewPromotion`, `pdViewFreeGifts`, `pdApplyCouponCode`, `pdViewInstallmentPlans`, `pdGalleryView`, `pdGallerySwipe`, `pdVideoPlay`, `pdSocialShare`, `pdBuyNow`, `pdAddToCart`, `pdSimilarProductClicked`, `pdPreOrderAcceptTerm`, `pdPreOrderFilledPersonalID`, `checkStockBranch`, `clickCollectOneHour`
+- **Check Stock popup:** `checkStockAtStoreSearchBranch`, `checkStockAtStoreFilterProvince`, `checkStockAtStoreFilterInStock`, `checkStockAtStoreSelectStoreNode`, `checkStockAtStoreSelectClickOnGoogleMaps`
+- **Collect 1hr popup:** `clickCollectOneHrSearchBranch`, `clickCollectOneHrFilterProvince`, `clickCollectOneHrFilterInStock`, `clickCollectOneHrSelectClickBuy`, `clickCollectOneHrSelectClickOnGoogleMaps`
+- **Compare:** `compareProductsProductSelected`, `compareProductsAddToWishlist`, `compareProductsBuyNow`
+- **Bundle V2:** `pdBundleSelectCampaignName`, `pdBundleCustomize`, `bpBundleSelectCampaignName`, `bpBundleBanner`, `bpBundleReward`, `bpBundleRewardFreebie`, `bpBundlePaginationNextPrevClicked`, `bpBundleProductAdd`, `bpBundleProductView`, `collectAtStore`
+- **Cart:** `cartProceedToCheckout`, `cartContinueShopping`, `cartEmptyBackToHome`, `cartShippingMethodCollectInOneHour`
+- **Checkout:** `shippingSubmit`, `shippingMethodChanged`, `shippingRequestTaxInvoice`, `paymentSelected`, `codeApplied`
+- **Checkout shipment:** `checkoutShipmentChangeBranch`, `checkoutShipmentSearchBranch`, `checkoutShipmentFilterProvince`, `checkoutShipmentFilterInStock`, `checkoutShipmentSelectClickBuy`, `checkoutShipmentSelectClickOnGoogleMaps`
+- **Order:** `orderCancelSubmit`, `orderReSelectPayment`, `orderRepayment`
+- **404:** `error404ToHomePage`, `error404ToContactUs`
+- **Equip (PC Builder):** all 20 `equip*` methods
+- **Auth:** `register`, `forgetPassword`
+
+---
+
+## [2.1.0] — 2026-05-26
+
+### Bug Fixes
+
+- **`resolvers/order.js`** — `preorderStatus` operator-precedence bug: `productItem.type` (a truthy string like `'Normal'`) was causing every product to report `preorderStatus: 'on'`. Fixed to `(productItem.isPreOrder || productItem.preOrder) ? 'on' : 'off'`.
+- **`gtm.js`** — `purchase` event used `PRODUCT_TYPE.FREEBIE` (undefined) instead of `PRODUCT_TYPE.FREEBIES`, so freebie items never had their `productType` set correctly. Fixed.
+- **`resolvers/customer.js`** — `transformConsents()` had no guard against `null`/non-array input, causing a runtime `TypeError`. Added `consents = []` default and `Array.isArray` check.
+- **`helpers/numeral.js`** — `convertSatangToBahtWithDecimal(0)` returned `null` because `!0` is `true`. Changed guard to `value == null` so zero-price items (free gifts, zero discounts) correctly return `"0.00"`.
+
+### Breaking Changes
+
+#### `gtm.js` — GA4-standard `ecommerce{}` structure
+
+The `ecommerce` object now contains **only GA4-standard parameters** (`currency`, `value`, `items[]`, `transaction_id`, `coupon`, `shipping`, `tax`, `affiliation`). All custom / business fields have been moved to the **event top level**.
+
+**Fields moved out of `ecommerce{}` → event top level:**
+
+| Field | Affected events |
+|---|---|
+| `profile` | `login`, `logout`, `register`, `updateProfile`, `purchase`, `checkout` (begin_checkout), `purchaseItem`, `productAddWishlist` |
+| `consent`, `consentModeV2` | `login`, `logout` |
+| `discount` | `purchase`, `begin_checkout` |
+| `payment`, `remainingPayment` | `purchase` |
+| `totalQuantities`, `subTotal`, `grandTotal`, `shippingFee`, `totalLine` | `purchase`, `begin_checkout`, `view_cart` |
+| `payment_type` | `begin_checkout` |
+| `checkoutStep`, `checkoutAction` | `view_cart`, `begin_checkout` |
+
+**Fields removed entirely:**
+- `ecommerce.coupons[]` (array) — redundant with `ecommerce.coupon` string per GA4 spec
+- `ecommerce.shippingAddresses`, `billingAddresses`, `taxInvoiceAddresses` from `purchase` — PII should not be in the analytics ecommerce payload
+
+**GTM container migration required:** Any GTM variable reading `{{DLV - ecommerce.profile.*}}`, `{{DLV - ecommerce.discount.*}}`, `{{DLV - ecommerce.payment.*}}` etc. must be updated to read from the top level instead: `{{DLV - profile.*}}`, `{{DLV - discount.*}}`, `{{DLV - payment.*}}`.
+
+**`search` event** — `keyword` and `suggestions` moved out of `ecommerce{}` to top level. The `ecommerce` object is removed entirely from this event (search is not an ecommerce event).
+
+#### `resolvers/order.js` — Legacy UA aliases removed from `transformProductItem`
+
+The deprecated `id`, `name`, `brand`, `category` aliases (kept since v2.0.0 for migration) have been removed. Use `item_id`, `item_name`, `item_brand`, `item_category` exclusively.
+
+**GTM container migration:** Update any GTM variables reading `{{DLV - ecommerce.items.0.id}}` → `{{DLV - ecommerce.items.0.item_id}}` (and `name`→`item_name`, `brand`→`item_brand`, `category`→`item_category`).
+
+### Improvements
+
+- **`ga4.js`** — Removed all commented-out dead code blocks (coupon, modal, switch methods that were never implemented). Reduces file noise significantly.
+- **`gtm.js`** — Private helpers cleaned up and made more concise. Consistent `ecommerce: null` clear before all ecommerce events.
+
+---
+
 ## [2.0.0] — 2026-05-22
 
 ### Breaking Changes

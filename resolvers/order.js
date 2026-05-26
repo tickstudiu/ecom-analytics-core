@@ -40,8 +40,8 @@ export const orderDetailProductPrice = (productObj) => {
 /**
  * Transform Product Item
  *
- * Output uses GA4-standard field names (item_id, item_name, item_brand, item_category, index)
- * as primary keys, with legacy UA names kept alongside for backward compat during migration.
+ * Output uses GA4-standard field names (item_id, item_name, item_brand, item_category, index).
+ * Legacy UA aliases (id, name, brand, category) have been removed as of v2.1.0.
  *
  * GA4 reference: https://developers.google.com/analytics/devguides/collection/ga4/reference/events#view_item_list
  *
@@ -60,31 +60,24 @@ export const transformProductItem = (productItem) => {
 	}
 
 	return {
-		// ── GA4 standard fields ──────────────────────────────────────────────
-		item_id:       productItem.sku,           // GA4: required
-		item_name:     productItem.name,           // GA4: required
+		// ── GA4 standard item fields ─────────────────────────────────────────
+		item_id:       productItem.sku,
+		item_name:     productItem.name,
 		item_brand:    productItem.brand,
 		item_category: resolvedCategory,
 		price:         resolvedPrice,
 		quantity:      productItem.quantity ?? 1,
 
 		// ── Custom / business fields (GTM variables / BigQuery) ──────────────
-		appleId:         productItem.appleSku || null,
-		image:           productItem.image,
-		preorderStatus:  productItem.isPreOrder || productItem.preOrder || productItem.type ? 'on' : 'off',
+		appleId:        productItem.appleSku || null,
+		image:          productItem.image,
+		preorderStatus: (productItem.isPreOrder || productItem.preOrder) ? 'on' : 'off',
 		productStockStatus,
-		productType:     PRODUCT_TYPE.NORMAL, // “Freebies” or “Normal”
-		breadcrumb:      `home/${resolvedCategory}`,
+		productType:    PRODUCT_TYPE.NORMAL,
+		breadcrumb:     `home/${resolvedCategory}`,
 		sellingPrice,
 		srpPrice,
-		savePrice:       convertSatangToBahtWithDecimal(productItem.savePrice),
-
-		// ── Legacy UA field aliases (keep until GTM tags are fully migrated) ─
-		// @deprecated — use item_id, item_name, item_brand, item_category instead
-		id:       productItem.sku,
-		name:     productItem.name,
-		brand:    productItem.brand,
-		category: resolvedCategory,
+		savePrice:      convertSatangToBahtWithDecimal(productItem.savePrice),
 	};
 };
 

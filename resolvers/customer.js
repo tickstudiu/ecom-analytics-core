@@ -26,7 +26,11 @@ export const transformUserProfile = (profile) => {
 	};
 };
 
-export const transformConsents = (consents) => {
+export const transformConsents = (consents = []) => {
+	if (!Array.isArray(consents)) {
+		return {};
+	}
+
 	return {
 		[PDPA_KEYS.FUNCTIONAL]: consents.find((cookieConsent) => cookieConsent.name === PDPA_KEYS.FUNCTIONAL),
 		[PDPA_KEYS.ANALYTICAL]: consents.find((cookieConsent) => cookieConsent.name === PDPA_KEYS.ANALYTICAL),

@@ -19,7 +19,8 @@ export const convertSatangToBaht = (value) => {
  * @returns {String} Baht with decimal
  */
 export const convertSatangToBahtWithDecimal = (value) => {
-	if (!value) {
+	// Use == null to catch both null and undefined, but allow 0 through (free items, zero discount)
+	if (value == null) {
 		return null;
 	}
 
