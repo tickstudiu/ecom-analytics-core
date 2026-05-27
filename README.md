@@ -131,8 +131,8 @@ GA4 ecommerce events ทุก event push เข้า `window.dataLayer`
 | `removeFromCart(products)` | `remove_from_cart` | ลบออกจากตะกร้า |
 | `viewCart(products, step)` | `view_cart` | ดูตะกร้า |
 | `checkout(products, step, profile)` | `begin_checkout` | เริ่ม checkout |
-| `purchase(orderDetail, profile)` | `purchase` | สั่งซื้อสำเร็จ |
-| `purchaseItem(item, orderId, profile)` | `purchaseItem` | สั่งซื้อรายชิ้น |
+| ~~`purchase(orderDetail, profile)`~~ | ~~`purchase`~~ | ⚠️ **Deprecated** — ย้ายไปยิงผ่าน Backend API แล้ว |
+| ~~`purchaseItem(item, orderId, profile)`~~ | ~~`purchaseItem`~~ | ⚠️ **Deprecated** — ย้ายไปยิงผ่าน Backend API แล้ว |
 | `productAddWishlist(product, profile, action)` | `add/remove_to_wishlist` | wishlist |
 | `search(keyword, suggestions)` | `search` | ค้นหา |
 | `couponsApplied(couponCode)` | `coupon_applied` | ใส่ coupon สำเร็จ |
@@ -216,6 +216,110 @@ GA4 custom event tracking — 150+ methods ครอบคลุมทุก use
 
 ---
 
+## GTM Delayed Loading Setup
+
+ทุก project ใช้ **Delayed GTM init** เพื่อประสิทธิภาพหน้าเว็บ — GTM script (และ 3rd-party tags ทั้งหมดภายใน) จะ load หลังจาก `TRACKING_DELAY_MS` milliseconds เท่านั้น
+
+### ภาพรวม
+
+```
+page load
+  └─ analytics-plugin.js (SSR) → consentDefault() → window.dataLayer[]
+  └─ analytics-plugin.client.js → setTimeout($gtm.init, TRACKING_DELAY_MS)
+       └─ เมื่อ $gtm.init() ถูกเรียก → GTM script โหลด → replay events ใน dataLayer[]
+```
+
+Events ที่ push เข้า `window.dataLayer[]` ก่อน GTM โหลด **จะถูก replay โดยอัตโนมัติ** เมื่อ GTM init ✅
+
+### 1. nuxt.config.js
+
+```js
+// .env
+TRACKING_DELAY_MS=5000  // default 5000ms, ใส่ 0 เพื่อ disable delay (dev เท่านั้น)
+GTM_ENABLED=true
+GTM_ID=GTM-XXXXXXX
+
+// nuxt.config.js
+modules: ['@nuxtjs/gtm'],
+
+gtm: {
+  id: process.env.GTM_ID,
+  enabled: process.env.GTM_ENABLED === 'true',
+  autoInit: false,       // ← ห้าม GTM โหลดอัตโนมัติ — เราจะ init เองด้วย setTimeout
+  pageTracking: false,   // ← ปิด auto pageView — ใช้ event 'pageView' จาก analytics-plugin แทน
+},
+
+publicRuntimeConfig: {
+  TRACKING_DELAY_MS: process.env.TRACKING_DELAY_MS,
+},
+```
+
+### 2. analytics-plugin.client.js (client-side only)
+
+```js
+// plugins/analytics-plugin.client.js
+export default ({ app, $gtm }, inject) => {
+  // Ensure dataLayer queue exists before GTM loads
+  window.dataLayer = window.dataLayer || [];
+
+  // Clamp delay: 0 = immediate, max 5000ms
+  const trackingDelayMs = Math.min(5000, Math.max(0, parseInt(process.env.TRACKING_DELAY_MS, 10) || 5000));
+  if (trackingDelayMs === 0) {
+    $gtm?.init?.();
+  } else {
+    setTimeout(() => $gtm?.init?.(), trackingDelayMs);
+  }
+
+  // Custom pageView event
+  app.router.afterEach((to, from) => {
+    if (process.client && $gtm) {
+      window.dataLayer.push({
+        event: 'pageView',
+        to: to.fullPath,
+        from: from.fullPath,
+        name: to.name,
+        title: document.title,
+      });
+    }
+  });
+};
+```
+
+> ⚠️ ต้องใช้ suffix `.client.js` — `$gtm.init()` เรียกได้ฝั่ง client เท่านั้น
+
+### 3. Force init บนหน้า Order Complete
+
+หน้า `pages/checkout/complete.vue` ต้อง force GTM init ทันที (ไม่รอ delay) เพราะ tags อื่นๆ เช่น GA4 purchase หรือ Pixel ต้องยิงก่อนที่ user จะปิดหน้า:
+
+```js
+// pages/checkout/complete.vue
+async mounted() {
+  // Force GTM to load immediately — tags inside GTM must fire before user navigates away
+  this.$gtm?.init?.();
+
+  // ... rest of mounted logic
+}
+```
+
+### 4. purchase / purchaseItem — Deprecated → Backend API
+
+`$dataLayer.purchase()` และ `$dataLayer.purchaseItem()` ถูกย้ายไปยิงผ่าน **Backend API** แล้ว (`serverMiddleware/trackPurchase.js`)
+
+```js
+// ❌ ไม่ใช้แล้ว — ลบออกจาก complete.vue ทุก project แล้ว
+$dataLayer.purchase(orderDetail, profile);
+$dataLayer.purchaseItem(item, orderId, profile);
+
+// ✅ แทนที่ด้วย orderComplete direct push (ยังคงอยู่) + Backend API call
+window.dataLayer.push({ event: 'orderComplete', data: transformedData });
+// Backend fires GA4 purchase event via Measurement Protocol
+```
+
+> **ทำไม?** — purchase event ยิงจาก frontend มีโอกาสหาย ถ้า user ปิดหน้าก่อน GTM โหลด  
+> Backend API ยิงผ่าน server-to-server → ไม่มีวัน miss
+
+---
+
 ## Migration จาก v2.0.x → v2.2.0
 
 ### analytics-plugin.js
@@ -249,9 +353,9 @@ import { createGtmBuilders, createGa4Builders } from '@comseven/analytics-core';
 
 | Project | Extension files | Notes |
 |---|---|---|
-| bnn | `braze.js` | Braze SDK events |
-| ustore-ecom | `ga4-extensions.js` | clickOnSitePopup, studentCode events ฯลฯ |
-| app-storefront | `ga4-extensions.js` | drawer/mini-cart custom events |
+| bnn | `ga4-extensions.js`, `braze.js` | 6 events: onEnterEquipPage, onSelectFilterEquip, headerMiniCartClicked, couponApplied, couponRemoved, storeLocationStoreClicked + Braze SDK |
+| ustore-ecom | `ga4-extensions.js` | 13 events: clickChat, clickOnSitePopup, clickOnSiteStrip, studentCode ฯลฯ |
+| app-storefront | `ga4-extensions.js`, `ga-extensions.js`, `gtm-extensions.js` | 10 GA4 events (LOB/PLP/coupon) + 16 Drawer/MiniCart events + 1 GTM event (viewLOB) |
 
 > Equip events และ bundle events ย้ายเข้ามาอยู่ใน core (`createGa4Builders`) แล้วตั้งแต่ v2.2.0
 

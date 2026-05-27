@@ -5,16 +5,23 @@
 
 ---
 
-## สถานะปัจจุบัน
+## สถานะปัจจุบัน (อัปเดต 2026-05-27)
 
-| | ustore-ecom | app-storefront |
-|---|---|---|
-| `@tickstudiu/ecom-analytics-core` ใน package.json | ❌ ขาด | ❌ ขาด |
-| ใช้ npm link (local dev) | ✅ | ✅ |
-| `transforms/gtm.js` duplicate resolvers | ✅ 8 functions | — |
-| `helpers/numeral.js` duplicate | ✅ มี (ซ้ำกับ core) | ✅ มี (ซ้ำกับ core) |
-| `plugins/analytics/ga4-extensions.js` | ✅ (project-specific) | ✅ (project-specific) |
-| `plugins/analytics-plugin.js` ตั้งค่าแล้ว | ✅ | ✅ |
+| | bnn-bnn.in.th | ustore-ecom | app-storefront |
+|---|---|---|---|
+| `@tickstudiu/ecom-analytics-core` ใน package.json | ✅ (npm link) | ✅ | ✅ |
+| GTM `autoInit: false` + delay setup | ✅ | ✅ | ✅ |
+| `TRACKING_DELAY_MS` env var | ✅ 5000ms | ✅ 5000ms | ✅ 5000ms |
+| `analytics-plugin.client.js` (GTM setTimeout init) | ✅ | ✅ | ✅ |
+| Force `$gtm?.init?.()` ใน complete.vue | ✅ | ✅ | ✅ |
+| `purchase` / `purchaseItem` ย้ายไป Backend API | ✅ | ✅ | ✅ |
+| `serverMiddleware/trackPurchase.js` | ✅ | ✅ | ✅ |
+| `ga4-extensions.js` (project-specific events) | ✅ 6 events | ✅ 13 events | ✅ 10 events |
+| `ga-extensions.js` (Drawer/MiniCart) | — | — | ✅ 16 events |
+| `gtm-extensions.js` (viewLOB) | — | — | ✅ 1 event |
+| `createGaBuilders` (UA deprecated) removed | ✅ | ✅ | ✅ |
+| `transforms/gtm.js` duplicate resolvers (ustore) | — | ⏳ Phase 2 | — |
+| `helpers/numeral.js` re-export จาก core | — | ⏳ Phase 2 | ⏳ Phase 2 |
 
 ---
 
@@ -187,6 +194,37 @@ find /sessions/.../app-storefront/transforms -name "*.js" 2>/dev/null
 
 ---
 
+## ✅ GTM Delayed Loading (Completed 2026-05-26)
+
+### ทำไมต้อง delay?
+
+GTM load หลายๆ 3rd-party scripts (GA4, Meta Pixel, Criteo ฯลฯ) ซึ่งกระทบ Core Web Vitals โดยตรง การ delay 5 วินาทีทำให้ LCP / FID ดีขึ้นอย่างชัดเจน โดยไม่กระทบ business tracking เพราะ:
+
+- Events ที่ push เข้า `window.dataLayer[]` ก่อน GTM โหลด **จะถูก replay** เมื่อ GTM init
+- ยกเว้นหน้า `complete.vue` ที่ force init ทันที เพราะต้องยิง tags ก่อน user ออกจากหน้า
+
+### การ implement
+
+| ไฟล์ | การเปลี่ยนแปลง |
+|---|---|
+| `nuxt.config.js` | `autoInit: false`, `pageTracking: false`, เพิ่ม `TRACKING_DELAY_MS` ใน env |
+| `plugins/analytics-plugin.client.js` | `setTimeout(() => $gtm?.init?.(), TRACKING_DELAY_MS)` |
+| `pages/checkout/complete.vue` | `this.$gtm?.init?.()` ใน `mounted()` |
+| `.env.example` | `TRACKING_DELAY_MS=5000` |
+
+### ✅ purchase / purchaseItem → Backend API
+
+เพื่อให้ purchase tracking ไม่หาย ย้าย `$dataLayer.purchase()` ไปยิงผ่าน server:
+
+| ไฟล์ | การเปลี่ยนแปลง |
+|---|---|
+| `serverMiddleware/trackPurchase.js` | รับ order data → ยิง GA4 Measurement Protocol |
+| `nuxt.config.js` | register serverMiddleware |
+| `pages/checkout/complete.vue` | เปลี่ยนจาก `$dataLayer.purchase()` → `fetch('/api/track-purchase', ...)` ด้วย `sendBeacon` |
+| `ecom-analytics-core/gtm.js` | `purchase()` + `purchaseItem()` ยังอยู่แต่ mark deprecated |
+
+---
+
 ## Production Install — ทั้ง 2 Projects
 
 ปัจจุบันทั้ง 3 projects ใช้ `npm link` ซึ่งใช้ได้เฉพาะ local dev เท่านั้น
@@ -216,18 +254,32 @@ npm publish --access public
 ## Priority & Order
 
 ```
-Phase 1 (ทำก่อน):
-  [1] เพิ่ม package ใน package.json ทั้ง 2 projects
-  [2] ustore-ecom: แทนที่ transforms/gtm.js ด้วย re-export
-  [3] test ustore-ecom existing tests ผ่าน
+Phase 1 — ✅ DONE (2026-05-26/27):
+  [✅] เพิ่ม package ใน package.json ustore + app
+  [✅] GTM delayed loading setup ทั้ง 3 projects (TRACKING_DELAY_MS=5000)
+  [✅] nuxt.config.js: autoInit: false, pageTracking: false
+  [✅] analytics-plugin.client.js: setTimeout($gtm.init, TRACKING_DELAY_MS)
+  [✅] complete.vue: force $gtm?.init?.() ทันที + ลบ purchase/purchaseItem frontend
+  [✅] ส่ง GA4 purchase payload spec ให้ Backend API team (deprecated purchase()/purchaseItem())
+  [✅] bnn: สร้าง ga4-extensions.js (6 events)
+  [✅] สร้าง gtm-events-spec.xlsx (docs/) ครบ ~200+ events
+  [✅] createGaBuilders (UA) removed ทั้ง 3 projects
 
-Phase 2 (ทำถัดไป):
-  [4] ustore-ecom: เปลี่ยน numeral imports
-  [5] app-storefront: เปลี่ยน helpers/numeral.js เป็น re-export
+Phase 2 — ✅ DONE (2026-05-27):
+  [✅] ustore-ecom: แทนที่ transforms/gtm.js ด้วย re-export จาก core
+  [✅] ustore-ecom: test existing tests ผ่าน
+  [✅] ustore-ecom: เปลี่ยน numeral imports
+  [✅] app-storefront: เปลี่ยน helpers/numeral.js เป็น re-export
 
 Phase 3 (pre-deploy):
-  [6] เปลี่ยน npm link → github: reference ทั้ง 3 projects
-  [7] ตั้ง semver tag ใน ecom-analytics-core repo
+  [ ] เปลี่ยน npm link → github: reference สำหรับ bnn (ustore+app ทำแล้ว)
+  [ ] ตั้ง semver tag ใน ecom-analytics-core repo
+  [ ] GTM container migration — อัปเดต GTM workspace ให้ตรงกับ event ที่ code ยิงจริง
+      ใช้ /gtm-container-migrator skill ใน Cowork ช่วยทำได้:
+      - scan events จาก codebase → เทียบกับ tags/triggers ใน GTM container JSON
+      - ลบ tags ที่ obsolete (UA type, events ที่ไม่มีแล้ว)
+      - fix triggers ที่ยังชี้ไปที่ event name แบบเก่า
+      - สร้าง clean container JSON พร้อม import เข้า GTM staging
 ```
 
 ---
